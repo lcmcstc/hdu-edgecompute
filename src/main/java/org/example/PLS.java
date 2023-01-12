@@ -17,15 +17,6 @@ public class PLS {
      */
     public String roots;
 
-    /**
-     * 用户终端节点`
-     */
-    public String users;
-
-    /**
-     * 核心服务器
-     */
-    public EdgeServer core;
     public int total;
     public PLS(){
 
@@ -34,8 +25,6 @@ public class PLS {
         this.check_plCanPeer= router.check_plCanPeer;
         this.check_plNoPeer=router.check_plNoPeer;
         this.roots= JSONObject.toJSONString(router.roots);
-        this.users=JSONObject.toJSONString(router.users);
-        this.core=router.core;
         this.total= router.total;
         this.plCanPeer=router.plCanPeer;
         this.plNoPeer= router.plNoPeer;

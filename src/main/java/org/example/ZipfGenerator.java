@@ -21,9 +21,12 @@ public class ZipfGenerator {
         contents=new LinkedList<>();
         gap_contents=new HashMap<>();
         for(char c:gaps){
+            double lastSumRatio=0;
             LinkedList<Content> cts=computeMap(size, skew);
             for(Content content:cts){
                 content.val=c+"_"+content.val;
+                content.lastSumRatio=lastSumRatio;
+                lastSumRatio=lastSumRatio+content.ratio;
             }
             gap_contents.put(c,cts);
             contents.addAll(cts);
@@ -56,7 +59,13 @@ public class ZipfGenerator {
         return ret;
     }
 
-    public Content getRandomContentByPrefer(){
-        return null;
+    public Content getRandomContentByGap(char gap){
+        double r=random.nextDouble();
+        for(Content content:this.gap_contents.get(gap)){
+            if(content.lastSumRatio+content.ratio>=r){
+                return content;
+            }
+        }
+        return new Content(0,"没有命中");
     }
 }

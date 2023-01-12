@@ -26,6 +26,7 @@ public class Response {
         this.current=start;
         this.hop=0;
         iterator.next();
+        this.value=v;
     }
 
     public Response(int start,int end,String v,PathLength pathLength,int hop){
@@ -34,6 +35,7 @@ public class Response {
         this.current=start;
         this.hop=hop;
         iterator.next();
+        this.value=v;
     }
 
     public int next(){

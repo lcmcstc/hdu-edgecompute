@@ -76,12 +76,15 @@ public class Router {
         this.check_plCanPeer= pls.check_plCanPeer;
         this.check_plNoPeer=pls.check_plNoPeer;
         this.roots= JSONObject.parseObject(pls.roots,new TypeReference<HashMap<Integer, EdgeServer>>() {});
-        this.users=JSONObject.parseObject(pls.users,new TypeReference<HashMap<Integer, EdgeServer>>() {});
-        this.core=pls.core;
         this.total= pls.total;
         this.plCanPeer=pls.plCanPeer;
         this.plNoPeer= pls.plNoPeer;
-
+        core=this.roots.get(0);
+        for (Map.Entry<Integer,EdgeServer> entry : roots.entrySet()) {
+            if(entry.getKey()>=0&&entry.getKey()<total&&entry.getValue().children.size()==0){
+                users.put(entry.getKey(),entry.getValue());
+            }
+        }
         for(Content c:zipfGenerator.contents){
             this.core.Force_Add(c.val);
         }
@@ -115,6 +118,17 @@ public class Router {
         FileUtil.write(fileName,str);
     }
 
+    Random random111 = new Random(111);
+    public EdgeServer getRandomUser(){
+        int userSeq = random111.nextInt(users.size());
+        int i=0;
+        for(Map.Entry<Integer,EdgeServer> entry:users.entrySet()){
+            if(i++==userSeq){
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
 
     public void distributeGap(ZipfGenerator zipfGenerator){
         final Random random = new Random(0);

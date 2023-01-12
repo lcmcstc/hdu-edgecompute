@@ -26,10 +26,22 @@ public class Request {
         this.current=start;
         this.hop=0;
         iterator.next();
+        this.value=v;
     }
 
-    public Request createUserRequest(int start,String v,PathLength pathLength){
-        return null;
+    public Request(){
+
+    }
+
+    public static Request createUserRequest(int userSeq,String v,PathLength pathLength){
+        Request request=new Request();
+        request.path=pathLength.getShortestPath(userSeq,0);
+        request.iterator=request.path.iterator();
+        request.current=userSeq;
+        request.iterator.next();
+        request.hop=0;
+        request.value=v;
+        return request;
     }
 
     public int next(){
@@ -39,4 +51,5 @@ public class Request {
     public boolean isFromUser(Router router){
         return router.users.containsKey(this.path.getFirst());
     }
+
 }
