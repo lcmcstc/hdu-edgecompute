@@ -6,8 +6,8 @@ import com.alibaba.fastjson.TypeReference;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 public class Router {
 
@@ -72,7 +72,7 @@ public class Router {
     }
 
 
-    public void initCore(PLS pls, LinkedList<Content> contents){
+    public void initCore(PLS pls,ZipfGenerator zipfGenerator){
         this.check_plCanPeer= pls.check_plCanPeer;
         this.check_plNoPeer=pls.check_plNoPeer;
         this.roots= JSONObject.parseObject(pls.roots,new TypeReference<HashMap<Integer, EdgeServer>>() {});
@@ -82,7 +82,7 @@ public class Router {
         this.plCanPeer=pls.plCanPeer;
         this.plNoPeer= pls.plNoPeer;
 
-        for(Content c:contents){
+        for(Content c:zipfGenerator.contents){
             this.core.Force_Add(c.val);
         }
     }
@@ -100,11 +100,27 @@ public class Router {
         return pl.paths[start][end];
     }
 
-    public static Router readRouter(String fileName, LinkedList<Content> contents) throws IOException {
-        String data=FileUtil.read("pls.txt");
+    public static Router readRouter(String fileName,ZipfGenerator zipfGenerator) throws IOException {
+        String data=FileUtil.read(fileName);
         PLS pls=JSONObject.parseObject(data,PLS.class);
         Router router=new Router();
-        router.initCore(pls,contents);
+        router.initCore(pls,zipfGenerator);
         return router;
     }
+
+    public static void writeRouter(String fileName,int num,ZipfGenerator zipfGenerator) throws IOException {
+        Router router=new Router(num);
+        router.distributeGap(zipfGenerator);
+        String str=JSONObject.toJSONString(new PLS(router));
+        FileUtil.write(fileName,str);
+    }
+
+
+    public void distributeGap(ZipfGenerator zipfGenerator){
+        final Random random = new Random(0);
+        for(EdgeServer user: users.values()){
+            user.gap=zipfGenerator.gaps[random.nextInt(zipfGenerator.gap_contents.keySet().size())];
+        }
+    }
+
 }

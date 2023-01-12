@@ -1,16 +1,33 @@
 package org.example;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Random;
 
 public class ZipfGenerator {
     private final Random random = new Random(0);
     public LinkedList<Content> contents;
+
+    public HashMap<Character,LinkedList<Content>> gap_contents;
+    /**
+     * 偏好区间，暂时按照固定百分比，分为4个区间，40% 30% 20% 10%
+     * 先根据偏好选定内容区间，再在内容区间内按照齐普夫分布进行结合。
+     */
     private static final  double Constant = 1.0;
+
+    public char[] gaps=new char[]{'A','B','C','D'};
     public ZipfGenerator(int size, double skew)
     {
-        // create the TreeMap
-        contents = computeMap(size, skew);
+        contents=new LinkedList<>();
+        gap_contents=new HashMap<>();
+        for(char c:gaps){
+            LinkedList<Content> cts=computeMap(size, skew);
+            for(Content content:cts){
+                content.val=c+"_"+content.val;
+            }
+            gap_contents.put(c,cts);
+            contents.addAll(cts);
+        }
     }
     //size为rank个数，skew为数据倾斜程度, 取值为0表示数据无倾斜，取值越大倾斜程度越高
     private static LinkedList<Content> computeMap(
@@ -37,5 +54,9 @@ public class ZipfGenerator {
             //map.put(sum, i - 1);
         }
         return ret;
+    }
+
+    public Content getRandomContentByPrefer(){
+        return null;
     }
 }
