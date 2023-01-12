@@ -1,6 +1,7 @@
 package org.example;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Random;
 
@@ -124,22 +125,60 @@ public class RouterGenerator {
             ret.add(start);
             ret.add(end);
         }
-        StringBuilder stringBuilder=new StringBuilder();
-        for(int i:ret){
-            stringBuilder.append(i).append('-');
-        }
-        stringBuilder.setLength(stringBuilder.length()-1);
-        System.out.println("从"+start+"到"+end+"的最短路径长度为："+
-                pathLength.dp[start][end]+"。路径为:"+stringBuilder.toString());
+        //输出路径，有需要时再用
+//        StringBuilder stringBuilder=new StringBuilder();
+//        for(int i:ret){
+//            stringBuilder.append(i).append('-');
+//        }
+//        stringBuilder.setLength(stringBuilder.length()-1);
+//        System.out.println("从"+start+"到"+end+"的最短路径长度为："+
+//                pathLength.dp[start][end]+"。路径为:"+stringBuilder.toString());
         pathLength.paths[start][end]=ret;
         return ret;
     }
-    public static boolean checkPathLength(PathLength pathLength,int[][] pic){
+
+    /**
+     * 在递归过程中，已经将各个节点之间的最短路径记录在pathLength中了
+     * @param pathLength
+     * @param pic
+     * @return
+     */
+    public static boolean checkAndSetPathLength(PathLength pathLength, int[][] pic){
         pathLength.pic=pic;
         pathLength.paths=new LinkedList[pathLength.dp.length][pathLength.dp.length];
         for(int start=0;start<pathLength.dp.length;start++){
             for(int end=start+1;end<pathLength.dp.length;end++){
                 getPath(start,end,pathLength);
+            }
+        }
+        //逆序
+        for(int start=1;start<pathLength.dp.length;start++){
+            for(int end=0;end<start;end++){
+                LinkedList<Integer> t=new LinkedList<>();
+                for(int i:pathLength.getShortestPath(end,start)){
+                    t.addFirst(i);
+                }
+                pathLength.paths[start][end]=t;
+            }
+        }
+        for(int start=0;start<pathLength.dp.length;start++){
+            for(int end=start+1;end<pathLength.dp.length;end++){
+                LinkedList<Integer> t1=new LinkedList<>();
+                for(int i:pathLength.getShortestPath(end,start)){
+                    t1.addFirst(i);
+                }
+                Iterator<Integer> i1=t1.iterator();
+                Iterator<Integer> i2=pathLength.getShortestPath(start,end).iterator();
+                while(i1.hasNext()){
+                    int it1=i1.next();
+                    int it2=i2.next();
+                    if(it1!=it2){
+                        return false;
+                    }
+                }
+                if(i2.hasNext()){
+                    return false;
+                }
             }
         }
         return true;

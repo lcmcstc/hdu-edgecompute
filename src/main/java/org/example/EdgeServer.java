@@ -11,6 +11,9 @@ public class EdgeServer {
         this.level = level;
     }
 
+    public EdgeServer(){
+
+    }
     public int seq;
     /**
      * 0 核心层、1 汇聚层、2 边缘层   3 通用层
@@ -21,9 +24,9 @@ public class EdgeServer {
     //本地缓存
     HashSet<String> cache = new HashSet<>();
     //缓存容量
-    int caption = 10;
+    public int caption = 10;
     //链表，用于LRU
-    LinkedList<String> link = new LinkedList<>();
+    public LinkedList<String> link = new LinkedList<>();
     //内容热度表，用于记录每个内容在本节点以及下面子节点的流行程度
     HashMap<String, Integer> hotTable = new HashMap<>();
 

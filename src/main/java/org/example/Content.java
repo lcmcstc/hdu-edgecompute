@@ -7,4 +7,8 @@ public class Content {
         this.ratio = r;
         this.val = v;
     }
+
+    public Content(){
+
+    }
 }

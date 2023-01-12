@@ -1,43 +1,32 @@
 package org.example;
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Random;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.TypeReference;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
 
 public class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
+        /*----------------------------创建满足齐普夫定律的内容-------------------------------*/
         //满足二八定律
         ZipfGenerator zipf = new ZipfGenerator(200,1.135);
         LinkedList<Content> contents = zipf.contents;
-        /*  重新计算 */
-        int[][] pic = RouterGenerator.CreateRouterNew(200);
-        HashMap<Integer, EdgeServer> edgeServers=RouterGenerator.edgeServers;
-        /*计算路径距离(不允许同级调用)*/
-        PathLength pathLength=RouterGenerator.ComputePathLength(pic);
-        RouterGenerator.checkPathLength(pathLength,pic);
-        //LinkedList<Integer> ppp=pathLength.getShortestPath(11,199);
-        int[][] dp1 = pathLength.dp;
-        /*计算路径距离，允许同级调用*/
-        RouterGenerator.AllowPeerThrouth(pic);
-        int[][] dp2 = RouterGenerator.ComputePathLength(pic).dp;
+        /*----------------------------创建满足齐普夫定律的内容完毕-------------------------------*/
 
-        //核心节点需要有全部内容
-        EdgeServer core = edgeServers.get(0);
-        for(Content c : contents){
-            core.Force_Add(c.val);
-        }
-        //找到无下游节点的节点，这些节点用来充当用户终端
-        LinkedList<EdgeServer> users = new LinkedList<EdgeServer>();
-        for (EdgeServer edge : edgeServers.values()) {
-            if (edge.children.size() == 0) {
-                users.add(edge);
-            }
-        }
+        /*------------------------------创建路由-------------------------------------------*/
+        Router router=Router.readRouter("pls.txt",contents);
+        /*------------------------------路由创建完毕-------------------------------------------*/
+
         Random random = new Random();
         //随机发出内容
         while (true) {
-            int u = random.nextInt(users.size());
-            EdgeServer eu = edgeServers.get(u);
+            int u = random.nextInt(router.users.size());
+            EdgeServer eu = router.roots.get(u);
             break;
         }
         System.out.println("Hello world!");
