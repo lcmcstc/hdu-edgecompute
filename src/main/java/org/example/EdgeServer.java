@@ -25,10 +25,12 @@ public class EdgeServer {
     HashSet<String> cache = new HashSet<>();
     //缓存容量
     public int caption = 10;
-    //链表，仅用于LRU
+    //链表，仅用于缓存替换
     public LinkedList<String> link = new LinkedList<>();
     //内容热度表，用于记录每个内容在本节点以及下面子节点的流行程度
     HashMap<String, Integer> hotTable = new HashMap<>();
+    //最后一次访问内容记录，用于缓存替换
+    HashMap<String,Long> lastTimeTable=new HashMap<>();
 
     //如果是汇聚层或者边缘层，下游节点集合
     public LinkedList<Integer> children = new LinkedList<>();
@@ -104,10 +106,27 @@ public class EdgeServer {
      * 节点收到响应实际上只有2件事
      * 1、继续向链路下游转发响应 （响应也有跳数）
      * 2、决定是否缓存响应内容，以及缓存在什么位置 //TODO （整个实验的核心）
+     * 缓存涉及到：
+     * 是否缓存：高层节点不可以同质化缓存
+     * 1、查看本节点是否有足够的空间，若有足够空间，且未被缓存，则直接缓存。（命中缓存时，需要将响应中是否已缓存设置为true）
+     * 2、本节点没有足够缓存空间时：
+     *  2.1 根据lastTimeTable和hotTable来计算缓存收益，看是否替换本节点缓存内容
+     *  2.2 若能替换，创建一个缓存请求
+     *
+     * 缓存替换
+     * 1、缓存替换需要综合考虑到内容流行度以及内容访问排名
+     *
+     * 缓存调整
      */
     public Response reciveResponse(Response response,Router router){
         response.hop++;
         response.current=this.seq;
+        //收到响应是否缓存
+        if(!response.cached){
+
+        }
+
+
         if(this.seq==response.path.getLast()){
             //响应已经到达目的地
             return response;

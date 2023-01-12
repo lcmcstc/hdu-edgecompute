@@ -23,6 +23,10 @@ public class Main {
         Router router=Router.readRouter("pls.txt",zipf);
         /*------------------------------路由创建完毕-------------------------------------------*/
 
+        /**
+         * db是记录每个用户访问每个内容的跳数
+         */
+        HashMap<EdgeServer,HashMap<String,LinkedList<Integer>>> db=new HashMap<>();
         Random random = new Random();
         //随机发出内容
         while (true) {
@@ -32,6 +36,23 @@ public class Main {
             }
             Request request=Request.createUserRequest(user.seq,zipf.getRandomContentByGap(user.gap).val, router.plNoPeer);
             Response response=router.getEdgeServer(request.next()).reciveRequest(request,router);
+            int hop=Math.min(response.hop, request.path.size()-1);
+            if(db.containsKey(user)){
+                HashMap<String,LinkedList<Integer>> m=db.get(user);
+                if(m.containsKey(request.value)){
+                    m.get(request.value).add(hop);
+                }else{
+                    LinkedList<Integer> l=new LinkedList<>();
+                    l.add(hop);
+                    m.put(request.value,l);
+                }
+            }else{
+                HashMap<String,LinkedList<Integer>> m=new HashMap<>();
+                LinkedList<Integer> l=new LinkedList<>();
+                l.add(hop);
+                m.put(request.value, l);
+                db.put(user,m);
+            }
             int r=-1;
         }
         //System.out.println("Hello world!");

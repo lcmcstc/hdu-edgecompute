@@ -60,6 +60,23 @@ public class ZipfGenerator {
     }
 
     public Content getRandomContentByGap(char gap){
+        int index=-1;
+        for(int i=0;i<this.gaps.length;i++){
+            if(gaps[i]==gap){
+                index=i;
+                break;
+            }
+        }
+        int r1=random.nextInt(100);
+        if(r1<40){
+            gap=this.gaps[index];
+        }else if(r1<70){
+            gap=this.gaps[(index+1)%this.gaps.length];
+        }else if(r1<90){
+            gap=this.gaps[(index+2)%this.gaps.length];
+        }else {
+            gap=this.gaps[(index+3)%this.gaps.length];
+        }
         double r=random.nextDouble();
         for(Content content:this.gap_contents.get(gap)){
             if(content.lastSumRatio+content.ratio>=r){

@@ -20,6 +20,9 @@ public class Response {
     public int hop;
 
 
+    //声明响应包中的内容是否已经被上层缓存，如果已经被上层缓存，则不缓存（边缘节点除外，边缘节点可采用同质化缓存）
+    public boolean cached=false;
+
     public Response(int start,int end,String v,PathLength pathLength){
         this.path=pathLength.getShortestPath(start,end);
         this.iterator=this.path.iterator();
