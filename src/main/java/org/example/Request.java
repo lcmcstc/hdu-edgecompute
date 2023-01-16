@@ -1,5 +1,6 @@
 package org.example;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 
@@ -7,17 +8,19 @@ public class Request {
     //路由
     public LinkedList<Integer> path;
 
+    public HashMap<Integer,Integer> eLength;
+
     //路由迭代器
     public Iterator<Integer> iterator;
 
     //请求当前所在节点
-    public int current;
+    private int current;
 
     //请求的内容对象
     public String value;
 
     //请求经过的跳数
-    public int hop;
+    private int hop;
 
     //如果是用户终端发出的请求，end一般情况下都是core
     public Request(int start,int end,String v,PathLength pathLength){
@@ -27,6 +30,7 @@ public class Request {
         this.hop=0;
         iterator.next();
         this.value=v;
+        this.eLength=new HashMap<>();
     }
 
     public Request(){
@@ -50,6 +54,18 @@ public class Request {
 
     public boolean isFromUser(Router router){
         return router.users.containsKey(this.path.getFirst());
+    }
+
+    public int arrivalNewEdgeServer(int seq){
+        int lastServer=this.current;
+        this.hop++;
+        this.current=seq;
+        eLength.put(this.current,hop);
+        return lastServer;
+    }
+
+    public int getHop(){
+        return this.hop;
     }
 
 }
