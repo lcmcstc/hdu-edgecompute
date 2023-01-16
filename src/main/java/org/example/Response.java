@@ -19,6 +19,8 @@ public class Response {
     //请求经过的跳数
     public int hop;
 
+    public int hop_request;
+
 
     //声明响应包中的内容是否已经被上层缓存，如果已经被上层缓存，则不缓存（边缘节点除外，边缘节点可采用同质化缓存）
     public boolean cached=false;
@@ -43,6 +45,15 @@ public class Response {
 
     public int next(){
         return this.iterator.next();
+    }
+
+    public int getNext(){
+        Iterator<Integer> iterator2=this.path.iterator();
+        while(true){
+            if(iterator2.next()==current){
+                return iterator2.next();
+            }
+        }
     }
 
 }

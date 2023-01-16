@@ -1,9 +1,6 @@
 package org.example;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
 public class EdgeServer {
     public EdgeServer(int seq, int level) {
@@ -31,6 +28,10 @@ public class EdgeServer {
     HashMap<String, Integer> hotTable = new HashMap<>();
     //最后一次访问内容记录，用于缓存替换
     HashMap<String,Long> lastTimeTable=new HashMap<>();
+    //记录- 来自哪个路由节点 - 长度 - 次数
+    HashMap<String, Map<Integer,Map<Integer,Integer>>> records=new HashMap<>();
+
+
 
     //如果是汇聚层或者边缘层，下游节点集合
     public LinkedList<Integer> children = new LinkedList<>();
@@ -87,6 +88,7 @@ public class EdgeServer {
             if(request.isFromUser(router)) {
                 updateHotRecurrence(request.value, router);
             }
+            response.hop_request=request.hop;
             return router.getEdgeServer(response.next()).reciveResponse(response,router);
         }
         if(DHT.containsKey(request.value)){
@@ -97,6 +99,7 @@ public class EdgeServer {
             if(request.isFromUser(router)) {
                 updateHotRecurrence(request.value, router);
             }
+            response.hop_request=request.hop;
             return router.getEdgeServer(response.next()).reciveResponse(response,router);
         }
         return router.getEdgeServer(request.next()).reciveRequest(request,router);
@@ -114,8 +117,9 @@ public class EdgeServer {
      *  2.2 若能替换，创建一个缓存请求，向下游发出缓存请求，得到缓存收益得分最高的节点。
      *
      *  统计所有路由
-     *  内容流行度越高、内容最后一次访问时间越近、被替换出去的缓存收益得分越低、（这个不对）节点的level越高（越靠近边缘），那么缓存收益得分越高
-     *  缓存收益得分影响因子：
+     *  内容流行度越高、内容最后一次访问时间越近、被替换出去的缓存收益得分越低、全量（经过该节点，能使得全局访问内容的平均跳数最低），那么缓存收益得分越高
+     *  缓存收益得分影响因子
+     *  由A缓存到B，那么A所有下游节点要想访问内容，都必须经过A到B拿内容。A将内容发送到B的同时，还会把自己下游所有对A请求的所有路径长度发送给B（不包含B自己下游）
      *
      *
      * 缓存替换
@@ -126,6 +130,8 @@ public class EdgeServer {
     public Response reciveResponse(Response response,Router router){
         response.hop++;
         response.current=this.seq;
+        //更新本地records
+
         //收到响应是否缓存
         if(!response.cached){
 
@@ -137,6 +143,21 @@ public class EdgeServer {
             return response;
         }
         return router.getEdgeServer(response.next()).reciveResponse(response,router);
+    }
+
+    public void updateRecords(Response response){
+        if(this.records.containsKey(response.value)){
+            Map<Integer,Map<Integer,Integer>> m2=this.records.get(response.value);
+            if(m2.containsKey(response.getNext())){
+
+            }
+        }else{
+            Map<Integer,Integer> m1=new HashMap<>();
+            m1.put(response.hop_request,1);
+            Map<Integer,Map<Integer,Integer>> m2=new HashMap<>();
+            m2.put(response.getNext(),m1);
+            this.records.put(response.value,m2);
+        }
     }
 
     public void updateHot(String v){
