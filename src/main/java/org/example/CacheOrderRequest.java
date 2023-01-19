@@ -3,7 +3,7 @@ package org.example;
 /**
  * 响应到达节点，节点递归向下询问子域节点，是否可以缓存内容，递归过程中，需要带入请求路径信息
  */
-public class CacheRequest {
+public class CacheOrderRequest {
     /**
      * 应该缓存的内容
      */
@@ -12,4 +12,13 @@ public class CacheRequest {
      * 缓存解的层级
      */
     public int layer;
+
+    public CacheOrderRequest(){
+
+    }
+
+    public CacheOrderRequest(String v,int l){
+        this.layer=l;
+        this.value=v;
+    }
 }

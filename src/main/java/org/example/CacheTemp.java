@@ -11,8 +11,14 @@ public class CacheTemp {
      */
     public int layer;
 
-    public CacheTemp(String v,int l){
+    /**
+     * 访问记录数量（流行度）
+     */
+    public int count;
+
+    public CacheTemp(String v,int l,int c){
         this.layer=l;
         this.value=v;
+        this.count=c;
     }
 }

@@ -19,7 +19,7 @@ public class EdgeServer {
     public final long interval=5*60*1000;
 
     /**
-     * 更新访问记录，清除历史访问记录，保留统计区间内容的访问记录。（加入随机冷冻算法）
+     * 更新访问记录，清除历史访问记录，保留统计区间内容的访问记录。（加入随机冷冻算法）(可用线程处理)
      */
     public void updateRecords(){
         Random r=new Random();
@@ -40,7 +40,7 @@ public class EdgeServer {
      * 注意，当有新的决策被送达节点时，需要删除needCache中上次相同决策层级的所有内容，并且清除出缓存
      * 当有相同的解时，做链式层级（为了更新的时候不删除其他解）
      */
-    public Map<String,LinkedList<Integer>> cache=new HashMap<>();
+    public Map<String,HashSet<Integer>> cache=new HashMap<>();
 
     /**
      * 每个节点需要记录请求内容和请求来源，在缓存决策时由上游节点收集下游节点信息即可
@@ -53,14 +53,26 @@ public class EdgeServer {
      * 收到缓存请求，更新本地缓存，若有冲突则解决冲突（按照缓存层级进行缓存淘汰）
      * 收到缓存请求，直接更新本地缓存，然后进行冲突解决。缓存请求应该是一个List，因为定期计算，每次计算会重新分配缓存位置与缓存内容，并不是实时的
      */
-    public CacheResponse receiveCacheRequest(List<CacheRequest> cacheRequests){
-        for(CacheRequest cacheRequest:cacheRequests){
+    public CacheResponse receiveCacheRequest(List<CacheOrderRequest> cacheRequests){
+        int layer=cacheRequests.get(0).layer;
+        LinkedList<String> needRemove=new LinkedList<>();
+        for(Map.Entry<String,HashSet<Integer>> entry:this.cache.entrySet()){
+            entry.getValue().remove(layer);
+            if(entry.getValue().size()==0){
+                //说明该缓存已经失效了
+                needRemove.add(entry.getKey());
+            }
+        }
+        for(String s:needRemove){
+            this.cache.remove(s);
+        }
+        for(CacheOrderRequest cacheRequest:cacheRequests){
             if(this.cache.containsKey(cacheRequest.value)){
                 this.cache.get(cacheRequest.value).add(cacheRequest.layer);
             }else{
-                LinkedList<Integer> linkedList=new LinkedList<>();
-                linkedList.add(cacheRequest.layer);
-                this.cache.put(cacheRequest.value,linkedList);
+                HashSet<Integer> set=new HashSet<>();
+                set.add(cacheRequest.layer);
+                this.cache.put(cacheRequest.value,set);
             }
         }
         competeCache();
@@ -75,13 +87,16 @@ public class EdgeServer {
             //说明当前缓存空间不足，需要发生缓存替换
             CacheTemp[] cacheTemps=new CacheTemp[cache.size()];
             int i=0;
-            for(Map.Entry<String,LinkedList<Integer>> entry:cache.entrySet()){
+            HashMap<String,Integer> records_count=this.countRecord();
+            for(Map.Entry<String,HashSet<Integer>> entry:cache.entrySet()){
                 int minLayer=Collections.min(entry.getValue());
-                cacheTemps[i++]=new CacheTemp(entry.getKey(),minLayer);
+                cacheTemps[i++]=new CacheTemp(entry.getKey(),minLayer,records_count.get(entry.getKey()));
             }
-            Arrays.sort(cacheTemps, Comparator.comparingInt(o -> o.layer));
+            //先按照内容访问热度排序，再按照解决方案层级排序，这样同层级竞争就可以按照内容热度排序(热度从大到小，层级从大到小)
+            Arrays.sort(cacheTemps, (o1, o2) -> o2.count-o1.count);
+            Arrays.sort(cacheTemps, (o1, o2) -> o2.layer-o1.layer);
             //只取top layer个
-            Map<String,LinkedList<Integer>> ret=new HashMap<>();
+            Map<String,HashSet<Integer>> ret=new HashMap<>();
             for(int j=0;j<caption;j++){
                 ret.put(cacheTemps[j].value,cache.get(cacheTemps[j]));
             }
@@ -90,6 +105,13 @@ public class EdgeServer {
     }
 
 
+    private HashMap<String,Integer> countRecord(){
+        HashMap<String,Integer> records_count=new HashMap<>();
+        for(Record record:this.records){
+            c1(records_count,record);
+        }
+        return records_count;
+    }
     private void c1(HashMap<String,Integer> records_count,Record record){
         if(records_count.containsKey(record.value)){
             records_count.put(record.value,records_count.get(record.value)+1);
@@ -108,6 +130,20 @@ public class EdgeServer {
             HashMap<Integer,Integer> m1=new HashMap<>();
             m1.put(record.fromUser,1);
             records_from_count.put(record.value,m1);
+        }
+    }
+    private void c3(Map<Integer,LinkedList<CacheOrderRequest>> result,DfsResult dfsResult){
+        if(dfsResult!=null){
+            for(Map.Entry<String,Integer> entry:dfsResult.ret.entrySet()){
+                if(result.containsKey(entry.getValue())){
+                    //dfs_Homogenization与dfs_Heterogenization不可能有重复的内容，直接添加
+                    result.get(entry.getValue()).add(new CacheOrderRequest(entry.getKey(), this.level));
+                }else{
+                    LinkedList<CacheOrderRequest> l=new LinkedList<>();
+                    l.add(new CacheOrderRequest(entry.getKey(), this.level));
+                    result.put(entry.getValue(),l);
+                }
+            }
         }
     }
     /**
@@ -141,19 +177,128 @@ public class EdgeServer {
         //从大到小排序
         Iterator<Map.Entry<String,Integer>> iterator=records_count.entrySet().stream().sorted((o1, o2) -> o2.getValue()-o1.getValue()).iterator();
         //needDistributeHomogenization是需要进行同质化缓存的内容
-        LinkedList<String> needDistributeHomogenization=new LinkedList<>();
+        String[] needDistributeHomogenization=new String[k1];
         int rank=0;
         while(iterator.hasNext()&&rank<k1){
-            needDistributeHomogenization.add(iterator.next().getKey());
-            rank++;
+            needDistributeHomogenization[rank++]=iterator.next().getKey();
         }
         //needDistributeHeterogenization是需要进行异质化缓存的内容
-        LinkedList<String> needDistributeHeterogenization=new LinkedList<>();
+        String[] needDistributeHeterogenization=new String[k2];
         while(iterator.hasNext()&&rank<k1+k2){
-            needDistributeHeterogenization.add(iterator.next().getKey());
+            needDistributeHeterogenization[rank-k1]=iterator.next().getKey();
             rank++;
         }
-        /**   第一步信息收集完毕，接下去就是计算最优解  **/
+        /*-------------------------信息收集完毕-----------------------------------*/
+
+        /**   第二步：计算最优解  **/
+        DfsResult resultHomogenization=null;
+        DfsResult resultHeterogenization=null;
+        LinkedList<Integer> selectors=new LinkedList<>(this.children);
+        selectors.add(this.seq);
+        dfs_Homogenization(resultHomogenization,records_from_count,needDistributeHomogenization,0,new HashMap<>(),selectors,router);
+        dfs_Heterogenization(resultHeterogenization,records_from_count,needDistributeHeterogenization,0,new HashMap<>(),selectors,router,new HashSet<>());
+
+        /** 第三步：向下分发最优解（依据最优解，调用子域节点的receiveCacheRequest方法）  **/
+        Map<Integer,LinkedList<CacheOrderRequest>> result=new HashMap<>();
+        c3(result,resultHomogenization);
+        c3(result,resultHeterogenization);
+        for(Map.Entry<Integer,LinkedList<CacheOrderRequest>> entry:result.entrySet()){
+            EdgeServer edgeServer=router.getEdgeServer(entry.getKey());
+            edgeServer.receiveCacheRequest(entry.getValue());
+        }
+    }
+
+    private boolean d1(HashMap<String,Integer> path,String[] needDistribute,Router router
+            ,DfsResult result,HashMap<String,HashMap<Integer,Integer>> records_from_count){
+        if(path.size()== needDistribute.length){
+            //说明遍历到子节点了
+            if(result==null){
+                result=new DfsResult();
+                result.ret=new HashMap<>(path);
+                result.current=this.computeSolution(records_from_count,path,router);
+            }else{
+                long al=this.computeSolution(records_from_count,path,router);
+                if(result.current>al){
+                    //当前才是最优解
+                    result.current=al;
+                    result.ret=new HashMap<>(path);
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+    /**
+     * 回溯算法，返回的最终结果是，内容分配到
+     * @param needDistributeHomogenization 待分配的同质化缓存
+     * @param index 当前迭代过程的内容索引（needDistributeHomogenization下）
+     * @param path 当前回溯路径
+     * @param result 当前最优解
+     * @param selector 候选节点
+     * @param router 路由信息
+     */
+    private void dfs_Homogenization(DfsResult result,HashMap<String,HashMap<Integer,Integer>> records_from_count
+            ,String[] needDistributeHomogenization,int index,HashMap<String,Integer> path,LinkedList<Integer> selector,Router router){
+        if(d1(path,needDistributeHomogenization,router,result,records_from_count)){
+            return;
+        }
+        for(int select:selector){
+            path.put(needDistributeHomogenization[index],select);
+            dfs_Homogenization(result,records_from_count,needDistributeHomogenization,index+1,path,selector,router);
+            path.remove(needDistributeHomogenization[index]);
+        }
+    }
+
+    private void dfs_Heterogenization(DfsResult result,HashMap<String,HashMap<Integer,Integer>> records_from_count
+            ,String[] needDistributeHeterogenization,int index,HashMap<String,Integer> path
+            ,LinkedList<Integer> selector,Router router,HashSet<Integer> alreadyUse){
+        if(d1(path,needDistributeHeterogenization,router,result,records_from_count)){
+            return;
+        }
+        for(int select:selector){
+            if(!alreadyUse.contains(select)) {
+                path.put(needDistributeHeterogenization[index], select);
+                alreadyUse.add(select);
+                dfs_Heterogenization(result, records_from_count, needDistributeHeterogenization, index + 1, path, selector, router,alreadyUse);
+                path.remove(needDistributeHeterogenization[index]);
+                alreadyUse.remove(select);
+            }
+        }
+    }
+
+    /**
+     * 计算当前解决方案的总访问跳数
+     * @param records_from_count 记录来源统计
+     * @param path 解决方案
+     * @param router 全局路由
+     * @return 总跳数
+     */
+    private long computeSolution(HashMap<String,HashMap<Integer,Integer>> records_from_count
+            ,HashMap<String,Integer> path,Router router){
+        long ret=0;
+        for(Map.Entry<String,Integer> entry1:path.entrySet()){
+            String v=entry1.getKey();
+            int seq=entry1.getValue();
+            //m1表示内容v来源统计
+            HashMap<Integer,Integer> m1=records_from_count.get(v);
+            for(Map.Entry<Integer,Integer> entry2:m1.entrySet()){
+                int from=entry2.getKey();
+                int count=entry2.getValue();
+                int distance=router.getPathLength(seq,from, router.plNoPeer);
+                ret+=count*distance;
+            }
+        }
+        return ret;
+    }
+    /** 不需要，因为缓存下发过程中会触发缓存替换算法，所以在决定解决方案是可以不考虑子节点的状态，单纯以最佳路由长度作为决策依据
+     * 判断是否可以将内容v缓存到节点edgeServer上
+     * @param v 内容
+     * @param edgeServer 节点
+     * @param path 当前选择路径（路径没有实际占用缓存空间，但是也会在当前解决方案中占用缓存空间）
+     * @return 返回是否可以
+     */
+    private boolean canAdd(String v,EdgeServer edgeServer,HashMap<String,Integer> path){
+        return true;
     }
 
     public EdgeServer(int seq, int level) {
