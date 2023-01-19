@@ -4,6 +4,16 @@ import java.util.*;
 
 public class EdgeServer {
     /**
+     * 同质化缓存阈值 （s*c）
+     */
+    public final int limitHomogenization=12;
+
+    /**
+     * 异质化缓存阈值（s^c）
+     */
+    public final int limitHeterogenization=4096;
+
+    /**
      * 统计记录时间的区间
      */
     public final long interval=5*60*1000;
@@ -79,9 +89,72 @@ public class EdgeServer {
         }
     }
 
+
+    private void c1(HashMap<String,Integer> records_count,Record record){
+        if(records_count.containsKey(record.value)){
+            records_count.put(record.value,records_count.get(record.value)+1);
+        }else{
+            records_count.put(record.value,1);
+        }
+    }
+    private void c2(HashMap<String,HashMap<Integer,Integer>> records_from_count,Record record){
+        if(records_from_count.containsKey(record.value)){
+            if(records_from_count.get(record.value).containsKey(record.fromUser)){
+                records_from_count.get(record.value).put(record.fromUser,records_from_count.get(record.value).get(record.fromUser)+1);
+            }else{
+                records_from_count.get(record.value).put(record.fromUser,1);
+            }
+        }else{
+            HashMap<Integer,Integer> m1=new HashMap<>();
+            m1.put(record.fromUser,1);
+            records_from_count.put(record.value,m1);
+        }
+    }
     /**
-     * 缓存决策算法
+     * 缓存决策算法，局部全信息透明最优决策
+     * router是全局路由信息
      */
+    public void solution(Router router){
+        /**   第一步：收集本子域内所有的信息，包括请求访问信息，以及节点数量信息  **/
+        //s 表示整个子域中节点数量
+        int s=this.children.size()+1;//+1是因为核节点本身也可以存储
+        //k1 表示整个子域中允许同质化缓存的数量
+        int k1=limitHomogenization/s;
+        //k2 表示整个子域中允许异质化缓存的数量
+        int k2=limitHeterogenization/s;
+        //records_count是所有流经本子域内容的统计
+        HashMap<String,Integer> records_count=new HashMap<>();
+        //records_count是所有流经本子域内容发出方的统计
+        HashMap<String,HashMap<Integer,Integer>> records_from_count=new HashMap<>();
+        for(Record record:this.records){
+            c1(records_count,record);
+            c2(records_from_count,record);
+        }
+        for(int seq:this.children){
+            EdgeServer edgeServer= router.getEdgeServer(seq);
+            for(Record record:edgeServer.records){
+                c1(records_count,record);
+                c2(records_from_count,record);
+            }
+        }
+        //只对热度排名前k1个内容进行同质化计算，简化问题域
+        //从大到小排序
+        Iterator<Map.Entry<String,Integer>> iterator=records_count.entrySet().stream().sorted((o1, o2) -> o2.getValue()-o1.getValue()).iterator();
+        //needDistributeHomogenization是需要进行同质化缓存的内容
+        LinkedList<String> needDistributeHomogenization=new LinkedList<>();
+        int rank=0;
+        while(iterator.hasNext()&&rank<k1){
+            needDistributeHomogenization.add(iterator.next().getKey());
+            rank++;
+        }
+        //needDistributeHeterogenization是需要进行异质化缓存的内容
+        LinkedList<String> needDistributeHeterogenization=new LinkedList<>();
+        while(iterator.hasNext()&&rank<k1+k2){
+            needDistributeHeterogenization.add(iterator.next().getKey());
+            rank++;
+        }
+        /**   第一步信息收集完毕，接下去就是计算最优解  **/
+    }
 
     public EdgeServer(int seq, int level) {
         this.seq = seq;
