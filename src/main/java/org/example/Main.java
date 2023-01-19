@@ -1,13 +1,6 @@
 package org.example;
 
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONObject;
-import com.alibaba.fastjson.TypeReference;
-
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 
 public class Main {
@@ -35,7 +28,7 @@ public class Main {
                 continue;
             }
             Request request=Request.createUserRequest(user.seq,zipf.getRandomContentByGap(user.gap).val, router.plNoPeer);
-            Response response=router.getEdgeServer(request.next()).reciveRequest(request,router);
+            Response response=router.getEdgeServer(request.next()).receiveRequest(request,router);
             int hop=Math.min(response.hop, request.path.size()-1);
             if(db.containsKey(user)){
                 HashMap<String,LinkedList<Integer>> m=db.get(user);

@@ -3,6 +3,86 @@ package org.example;
 import java.util.*;
 
 public class EdgeServer {
+    /**
+     * 统计记录时间的区间
+     */
+    public final long interval=5*60*1000;
+
+    /**
+     * 更新访问记录，清除历史访问记录，保留统计区间内容的访问记录。（加入随机冷冻算法）
+     */
+    public void updateRecords(){
+        Random r=new Random();
+        LinkedList<Record> ret=new LinkedList<>();
+        for(Record record:records){
+            double d=(((System.currentTimeMillis()-record.arriveTime)+interval)*1.0)/(interval*1.0);
+            if(r.nextDouble()<=d){
+                ret.add(record);
+            }
+        }
+        this.records=ret;
+    }
+
+    /**
+     * 用一个数据结构存储解以及解来源。
+     * 本质上就是本节点待缓存的内容，实际上已经占位，后续决策仅允许使用剩余空间。保证下次内容达到节点时，一定能被缓存
+     * key:应该被缓存的内容  value:决定该内容被缓存到本节点的决策层级
+     * 注意，当有新的决策被送达节点时，需要删除needCache中上次相同决策层级的所有内容，并且清除出缓存
+     * 当有相同的解时，做链式层级（为了更新的时候不删除其他解）
+     */
+    public Map<String,LinkedList<Integer>> cache=new HashMap<>();
+
+    /**
+     * 每个节点需要记录请求内容和请求来源，在缓存决策时由上游节点收集下游节点信息即可
+     * 第一层： key：请求内容  value：map
+     * 第二次： key：请求来源（用户终端序号）， value：统计次数
+     */
+    public LinkedList<Record> records=new LinkedList<>();
+
+    /**
+     * 收到缓存请求，更新本地缓存，若有冲突则解决冲突（按照缓存层级进行缓存淘汰）
+     * 收到缓存请求，直接更新本地缓存，然后进行冲突解决。缓存请求应该是一个List，因为定期计算，每次计算会重新分配缓存位置与缓存内容，并不是实时的
+     */
+    public CacheResponse receiveCacheRequest(List<CacheRequest> cacheRequests){
+        for(CacheRequest cacheRequest:cacheRequests){
+            if(this.cache.containsKey(cacheRequest.value)){
+                this.cache.get(cacheRequest.value).add(cacheRequest.layer);
+            }else{
+                LinkedList<Integer> linkedList=new LinkedList<>();
+                linkedList.add(cacheRequest.layer);
+                this.cache.put(cacheRequest.value,linkedList);
+            }
+        }
+        competeCache();
+        return null;
+    }
+
+    /**
+     * 缓存淘汰算法（以解决方案层级为优先的缓存替换算法）
+     */
+    public void competeCache(){
+        if(this.cache.size()>this.caption){
+            //说明当前缓存空间不足，需要发生缓存替换
+            CacheTemp[] cacheTemps=new CacheTemp[cache.size()];
+            int i=0;
+            for(Map.Entry<String,LinkedList<Integer>> entry:cache.entrySet()){
+                int minLayer=Collections.min(entry.getValue());
+                cacheTemps[i++]=new CacheTemp(entry.getKey(),minLayer);
+            }
+            Arrays.sort(cacheTemps, Comparator.comparingInt(o -> o.layer));
+            //只取top layer个
+            Map<String,LinkedList<Integer>> ret=new HashMap<>();
+            for(int j=0;j<caption;j++){
+                ret.put(cacheTemps[j].value,cache.get(cacheTemps[j]));
+            }
+            this.cache=ret;
+        }
+    }
+
+    /**
+     * 缓存决策算法
+     */
+
     public EdgeServer(int seq, int level) {
         this.seq = seq;
         this.level = level;
@@ -19,8 +99,10 @@ public class EdgeServer {
     //键是内容。值是节点索引
     HashMap<String, Integer> DHT = new HashMap<>();
     //本地缓存
-    HashSet<String> cache = new HashSet<>();
-    //缓存容量
+    HashSet<String> old_cache = new HashSet<>();
+    /**
+     * 缓存容量
+     */
     public int caption = 10;
     //链表，仅用于缓存替换
     public LinkedList<String> link = new LinkedList<>();
@@ -29,7 +111,7 @@ public class EdgeServer {
     //最后一次访问内容记录，用于缓存替换
     HashMap<String,Long> lastTimeTable=new HashMap<>();
     //记录的是请求到达节点走过的路由长度,记录来自哪个下游节点，传上来什么内容，这个内容的所有路由路径长度
-    HashMap<Integer,HashMap<String,LinkedList<Integer>>> records=new HashMap<>();
+    HashMap<Integer,HashMap<String,LinkedList<Integer>>> old_records =new HashMap<>();
 
     //如果是汇聚层或者边缘层，下游节点集合
     public LinkedList<Integer> children = new LinkedList<>();
@@ -41,22 +123,22 @@ public class EdgeServer {
 
     //无条件添加缓存内容
     public void Force_Add(String cont) {
-        this.cache.add(cont);
+        this.old_cache.add(cont);
     }
 
     public void LRU_ADD(String content) {
-        if (cache.contains(content)) {
+        if (old_cache.contains(content)) {
             link.remove(content);
             link.addFirst(content);
             return;
         }
-        if (cache.size() < this.caption) {
+        if (old_cache.size() < this.caption) {
             link.addFirst(content);
-            cache.add(content);
+            old_cache.add(content);
             return;
         }
-        cache.remove(link.removeLast());
-        cache.add(content);
+        old_cache.remove(link.removeLast());
+        old_cache.add(content);
         link.addFirst(content);
     }
 
@@ -74,15 +156,15 @@ public class EdgeServer {
      * 1、请求到达节点时，立即更新本地hotTable表
      * 2、若当前节点能满足请求，则需要递归通知当前节点父节点更新hotTable表
      */
-    public Response reciveRequest(Request request,Router router){
+    public Response receiveRequest(Request request, Router router){
         lastTimeTable.put(request.value,System.currentTimeMillis());
         int lastServer=request.arrivalNewEdgeServer(this.seq);
         //记录下来每一次内容请求到达本节点的路由长度
-        this.updateRecords(request.value,lastServer,request.eLength.get(this.seq));
+        this.updateRecords(request.value,request.path.getFirst());
         if(request.isFromUser(router)) {
             updateHot(request.value);
         }
-        if(this.cache.contains(request.value)){
+        if(this.old_cache.contains(request.value)){
             //本节点已经满足缓存，直接返回。创建新的响应，并向下发送
             Response response=new Response(this.seq,request.path.getFirst(),request.value, router.plNoPeer);
             if(request.isFromUser(router)) {
@@ -93,7 +175,7 @@ public class EdgeServer {
         }
         if(DHT.containsKey(request.value)){
             Request myReq=new Request(this.seq,DHT.get(request.value),request.value,router.plNoPeer);
-            Response respTemp=router.getEdgeServer(request.next()).reciveRequest(myReq,router);
+            Response respTemp=router.getEdgeServer(request.next()).receiveRequest(myReq,router);
             //收到响应后，生成响应给用户的响应
             Response response=new Response(this.seq,request.path.getFirst(),request.value, router.plNoPeer,respTemp.hop);
             if(request.isFromUser(router)) {
@@ -102,7 +184,7 @@ public class EdgeServer {
             response.hop_request=request.getHop();
             return router.getEdgeServer(response.next()).reciveResponse(response,router);
         }
-        return router.getEdgeServer(request.next()).reciveRequest(request,router);
+        return router.getEdgeServer(request.next()).receiveRequest(request,router);
     }
 
     /**
@@ -143,81 +225,13 @@ public class EdgeServer {
         return router.getEdgeServer(response.next()).reciveResponse(response,router);
     }
 
-    /**
-     * 计算缓存正向收益
-     * @param p 所有路径长度总和
-     * @param t 访问次数
-     * @param l 最后一次访问时间距离现在的差值(秒)
-     * @return
-     */
-    private double computeCacheValue(double p,double t,double l){
-        return (t*t)/(p*l);
-    }
-
-    //计算本节点的缓存效益得分
-    private double computeCacheValue(String v){
-        double p=0.0;
-        double t=0.0;
-        for(HashMap<String,LinkedList<Integer>> m1:this.records.values()){
-            if(m1.containsKey(v)){
-                for(int i:m1.get(v)){
-                    t++;
-                    p+=i;
-                }
-            }
-        }
-        long timeValue=System.currentTimeMillis()-lastTimeTable.get(v);
-        //总访问次数/平均访问长度，次数越多，平均访问长度越小，得分越高
-        return computeCacheValue(p,t,(timeValue*1.0)/1000.0);
-    }
-
-    public double computeCacheValue(String v,LinkedList<Integer> pLengths){
-        LinkedList<Integer> ps=new LinkedList<>(pLengths);
-        for(HashMap<String,LinkedList<Integer>> m1:this.records.values()){
-            if(m1.containsKey(v)){
-                ps.addAll(m1.get(v));
-            }
-        }
-        //ps是真正所有内容v的访问路径长度
-        double t=pLengths.size();
-        double p=0;
-        for(int i:pLengths){
-            p+=i;
-        }
-        long timeValue=System.currentTimeMillis()-lastTimeTable.get(v);
-        double l=(timeValue*1.0)/1000.0;
-        return 1.0;
-    }
-
-    public CacheResponse reciveCacheRequest(CacheRequest cacheRequest){
-        if(this.DHT.containsKey(cacheRequest.v)){
-            //子域内已经缓存，不再缓存
-            return CacheResponse.cantCache();
-        }
-        //暂存本节点所有缓存的效益得分
-        double[] values=new double[this.cache.size()];
-        Arrays.sort(values);
-        return null;
-    }
 
 
-    public void updateRecords(String v,int lastServer,int eLength){
-        if(this.records.containsKey(lastServer)){
-            HashMap<String,LinkedList<Integer>> m1=records.get(lastServer);
-            if(m1.containsKey(v)){
-                m1.get(v).add(eLength);
-            }else{
-                LinkedList<Integer> l=new LinkedList<>();
-                l.add(eLength);
-                m1.put(v,l);
-            }
-        }else{
-            HashMap<String,LinkedList<Integer>> m1=new HashMap<>();
-            LinkedList<Integer> l=new LinkedList<>();
-            l.add(eLength);
-            m1.put(v,l);
-            this.records.put(lastServer,m1);
-        }
+
+
+
+    public void updateRecords(String v,int seq){
+        this.records.add(new Record(v,System.currentTimeMillis(),seq));
     }
 
     public void updateHot(String v){
