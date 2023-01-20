@@ -16,7 +16,7 @@ public class EdgeServer {
     /**
      * 异质化缓存阈值（s^c）
      */
-    public final int limitHeterogenization=24;
+    public final int limitHeterogenization=4096;
 
     /**
      * 统计记录时间的区间
@@ -24,7 +24,7 @@ public class EdgeServer {
     public final long interval4updateRecords =3*60*1000;
 
     /**
-     * 更新访问记录，清除历史访问记录，保留统计区间内容的访问记录。（加入随机冷冻算法）(可用线程处理) TODO
+     * 更新访问记录，清除历史访问记录，保留统计区间内容的访问记录。（加入随机冷冻算法）(可用线程处理)
      */
     public void updateRecords(){
         Random r=new Random();
@@ -211,7 +211,7 @@ public class EdgeServer {
     DfsResultHeterogenization resultHeterogenization=null;
     LinkedList<LinkedList<Integer>> dfs_fullArrayRet=null;
     /**
-     * 缓存决策算法，局部全信息透明最优决策  定期执行 TODO
+     * 缓存决策算法，局部全信息透明最优决策  定期执行
      * router是全局路由信息
      */
     public void solution(Router router){
@@ -224,7 +224,7 @@ public class EdgeServer {
         //k1 表示整个子域中允许同质化缓存的数量
         int k1=limitHomogenization/s;
         //k2 表示整个子域中允许异质化缓存的数量
-        int k2=limitHeterogenization/s;
+        int k2=(int)(Math.log(limitHeterogenization)/Math.log(s));
         //同质化缓存+异质化缓存总内容不应该超过整个子域的最大缓存空间
         if(k1+k2>s*caption){
             k2=s*caption-k1;

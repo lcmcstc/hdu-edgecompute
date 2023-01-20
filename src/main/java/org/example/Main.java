@@ -86,7 +86,7 @@ public class Main {
                             }
                         }
                     }
-                    if(times==200000){
+                    if(times==20000){
                         long end=System.currentTimeMillis();
                         System.out.println("模拟发送133333个内容共耗时 "+(end-start)/1000+" 秒");
                         System.out.println("最初平均跳数  "+avg_hop.getFirst()+",最终平均跳数  "+avg_hop.getLast());
