@@ -16,7 +16,7 @@ public class EdgeServer {
     /**
      * 异质化缓存阈值（s^c）
      */
-    public final int limitHeterogenization=4096;
+    public final int limitHeterogenization=24;
 
     /**
      * 统计记录时间的区间
@@ -125,20 +125,24 @@ public class EdgeServer {
     public void competeCache(){
         if (this.cache.size() > this.caption) {
             //说明当前缓存空间不足，需要发生缓存替换
-            CacheTemp[] cacheTemps = new CacheTemp[cache.size()];
-            int i = 0;
+            LinkedList<CacheTemp> tl=new LinkedList<>();
             HashMap<String, Integer> records_count = this.countRecord();
             for (Map.Entry<String, HashSet<Integer>> entry : cache.entrySet()) {
                 int minLayer = Collections.min(entry.getValue());
-                cacheTemps[i++] = new CacheTemp(entry.getKey(), minLayer, records_count.get(entry.getKey()));
+                if(records_count.containsKey(entry.getKey())){
+                    //失去流行度的不缓存
+                    tl.add(new CacheTemp(entry.getKey(), minLayer, records_count.get(entry.getKey())));
+                }
+
             }
+            CacheTemp[] cacheTemps = tl.toArray(new CacheTemp[0]);
             //先按照内容访问热度排序，再按照解决方案层级排序，这样同层级竞争就可以按照内容热度排序(热度从大到小，层级从大到小)
             Arrays.sort(cacheTemps, (o1, o2) -> o2.count - o1.count);
             Arrays.sort(cacheTemps, (o1, o2) -> o2.layer - o1.layer);
             //只取top layer个
             Map<String, HashSet<Integer>> ret = new HashMap<>();
-            for (int j = 0; j < caption; j++) {
-                ret.put(cacheTemps[j].value, cache.get(cacheTemps[j]));
+            for (int j = 0; j < cacheTemps.length; j++) {
+                ret.put(cacheTemps[j].value, cache.get(cacheTemps[j].value));
             }
             this.cache = ret;
         }
@@ -211,6 +215,9 @@ public class EdgeServer {
      * router是全局路由信息
      */
     public void solution(Router router){
+        long start=System.currentTimeMillis();
+        System.out.println("开始进入节点 "+this.seq+" 解决方案处理过程");
+
         /**   第一步：收集本子域内所有的信息，包括请求访问信息，以及节点数量信息  **/
         //s 表示整个子域中节点数量
         int s=this.children.size()+1;//+1是因为核节点本身也可以存储
@@ -256,7 +263,8 @@ public class EdgeServer {
         }
         String[] needDistributeHeterogenization=temp.toArray(new String[0]);
         /*-------------------------信息收集完毕-----------------------------------*/
-
+        long currentTime=System.currentTimeMillis();
+        System.out.println("收集信息共耗时："+(currentTime-start)/1000+"秒");start=currentTime;
         /**   第二步：计算最优解  **/
 
         LinkedList<Integer> selectors=new LinkedList<>(this.children);
@@ -266,9 +274,12 @@ public class EdgeServer {
         dfs_fullArray(selectors,new LinkedList<>(),new HashSet<>());
         resultHomogenization=null;
         dfs_Homogenization(records_from_count,needDistributeHomogenization,0,new HashMap<>(),dfs_fullArrayRet,router);
+        currentTime=System.currentTimeMillis();
+        System.out.println("计算同质化缓存以及全排列共耗时："+(currentTime-start)/1000+"秒");start=currentTime;
         resultHeterogenization=null;
         dfs_Heterogenization(records_from_count,needDistributeHeterogenization,0,new HashMap<>(),selectors,router);
-
+        currentTime=System.currentTimeMillis();
+        System.out.println("计算异质化缓存以及全排列共耗时："+(currentTime-start)/1000+"秒");start=currentTime;
         /** 第三步：向下分发最优解（依据最优解，调用子域节点的receiveCacheRequest方法）  **/
         Map<Integer,LinkedList<CacheOrderRequest>> result=new HashMap<>();
         c4(result,resultHomogenization);
@@ -277,6 +288,8 @@ public class EdgeServer {
             EdgeServer edgeServer=router.getEdgeServer(entry.getKey());
             edgeServer.receiveCacheRequest(entry.getValue(),router);
         }
+        currentTime=System.currentTimeMillis();
+        System.out.println("策略分发："+(currentTime-start)/1000+"秒");
     }
 
 
@@ -481,19 +494,39 @@ public class EdgeServer {
      * @param seq 下游节点序号
      */
     public void receiveAndUpdateDHT(HashSet<String> v ,int seq){
+        HashMap<String,HashSet<Integer>> needRemoveRoot=new HashMap<>();
         //除了添加子节点的缓存信息，还要将子节点删除的缓存同时在dht中删除，先删除再添加的目的是为了减少循环次数
         for(String s:DHT.keySet()){
             if(!v.contains(s)){
                 if(DHT.get(s).contains(seq)){
                     //seq节点发来的内容没有包括s，但是s原来是seq的缓存之一，所以要将s的缓存删除seq
-                    DHT.get(s).remove(seq);
-                    if(DHT.get(s).size()==0){
-                        //子域中已经没有缓存s的节点了
-                        DHT.remove(s);
+                    if(needRemoveRoot.containsKey(s)){
+                        needRemoveRoot.get(s).add(seq);
+                    }else{
+                        HashSet<Integer> set=new HashSet<>();
+                        set.add(seq);
+                        needRemoveRoot.put(s,set);
                     }
                 }
             }
         }
+        //删除链中节点
+        for(Map.Entry<String,HashSet<Integer>> entry1:needRemoveRoot.entrySet()){
+            for(int i:entry1.getValue()){
+                this.DHT.get(entry1.getKey()).remove(i);
+            }
+        }
+        LinkedList<String> needRemoveKey=new LinkedList<>();
+        for(Map.Entry<String,HashSet<Integer>> entry:DHT.entrySet()){
+            if(entry.getValue().size()==0){
+                needRemoveKey.add(entry.getKey());
+            }
+        }
+        //真正删除
+        for(String key:needRemoveKey){
+            DHT.remove(key);
+        }
+
 
         for(String s:v){
             if(this.DHT.containsKey(s)){

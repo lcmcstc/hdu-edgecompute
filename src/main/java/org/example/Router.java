@@ -61,11 +61,11 @@ public class Router {
      * 开启所有非用户终端的线程（定期清除访问记录，缓存决策算法）
      */
      private void startAllEdgeServerThread(){
-        for(EdgeServer edgeServer:roots.values()){
-            if(!users.containsKey(edgeServer.seq)){
-                edgeServer.startUpdateRecords();
-            }
-        }
+//        for(EdgeServer edgeServer:roots.values()){
+//            if(!users.containsKey(edgeServer.seq)){
+//                edgeServer.startUpdateRecords();
+//            }
+//        }
     }
 
     /**
@@ -112,6 +112,10 @@ public class Router {
      * 获取2个节点长度
      */
     public int getPathLength(int start,int end,PathLength pl){
+        LinkedList<Integer> t=getPath(start,end,pl);
+        if(t==null){
+            return 9999;
+        }
         return getPath(start,end,pl).size();
     }
     /**
