@@ -5,6 +5,11 @@ import java.util.stream.Collectors;
 
 public class EdgeServer {
     /**
+     * 缓存容量
+     */
+    public int caption = 20;
+
+    /**
      * 涉及到迭代器，且线程不安全时，不能锁，统一采用
      */
 
@@ -543,10 +548,7 @@ public class EdgeServer {
     private int getFirstSeqByDHTString(String v){
         return DHT.get(v).iterator().next();
     }
-    /**
-     * 缓存容量
-     */
-    public int caption = 10;
+
 
     //如果是汇聚层或者边缘层，下游节点集合
     public LinkedList<Integer> children = new LinkedList<>();
