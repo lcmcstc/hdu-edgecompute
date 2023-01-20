@@ -69,7 +69,7 @@ public class ZipfGenerator {
         }
         int r1=random.nextInt(100);
         if(r1<40){
-            gap=this.gaps[index];
+            gap = this.gaps[index];
         }else if(r1<70){
             gap=this.gaps[(index+1)%this.gaps.length];
         }else if(r1<90){

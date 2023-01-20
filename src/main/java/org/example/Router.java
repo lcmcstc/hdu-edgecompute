@@ -57,6 +57,16 @@ public class Router {
         }
 
     }
+    /**
+     * 开启所有非用户终端的线程（定期清除访问记录，缓存决策算法）
+     */
+     private void startAllEdgeServerThread(){
+        for(EdgeServer edgeServer:roots.values()){
+            if(!users.containsKey(edgeServer.seq)){
+                edgeServer.startUpdateRecords();
+            }
+        }
+    }
 
     /**
      * 根据编号获取边缘服务器
@@ -86,8 +96,16 @@ public class Router {
             }
         }
         for(Content c:zipfGenerator.contents){
-            this.core.Force_Add(c.val);
+            this.core.Force_Add(c.val,99);
         }
+        startAllEdgeServerThread();
+    }
+    public void initCore(ZipfGenerator zipfGenerator){
+        for(Content c:zipfGenerator.contents){
+            this.core.Force_Add(c.val,99);
+        }
+        this.distributeGap(zipfGenerator);
+        startAllEdgeServerThread();
     }
 
     /**
@@ -116,6 +134,12 @@ public class Router {
         router.distributeGap(zipfGenerator);
         String str=JSONObject.toJSONString(new PLS(router));
         FileUtil.write(fileName,str);
+    }
+
+    public static Router createRouter(int total,ZipfGenerator zipfGenerator){
+        Router router=new Router(total);
+        router.initCore(zipfGenerator);
+        return router;
     }
 
     Random random111 = new Random(111);
