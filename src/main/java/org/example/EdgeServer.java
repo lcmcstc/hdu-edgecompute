@@ -3,11 +3,17 @@ package org.example;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * TODO
+ * 1、自动化测试方案
+ * 2、当局部全局最优解缓存分配完毕后，节点依然有剩余缓存空间，应当采用何种方法（H2RR）
+ */
+
 public class EdgeServer {
     /**
      * 缓存容量
      */
-    public int caption = 2;
+    public int caption = 10;
 
     /**
      * 涉及到迭代器，且线程不安全时，不能锁，统一采用
