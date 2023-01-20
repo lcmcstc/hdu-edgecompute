@@ -132,7 +132,7 @@ public class EdgeServer {
             records_from_count.put(record.value,m1);
         }
     }
-    private void c3(Map<Integer,LinkedList<CacheOrderRequest>> result,DfsResult dfsResult){
+    private void c3(Map<Integer,LinkedList<CacheOrderRequest>> result, DfsResultHeterogenization dfsResult){
         if(dfsResult!=null){
             for(Map.Entry<String,Integer> entry:dfsResult.ret.entrySet()){
                 if(result.containsKey(entry.getValue())){
@@ -142,6 +142,21 @@ public class EdgeServer {
                     LinkedList<CacheOrderRequest> l=new LinkedList<>();
                     l.add(new CacheOrderRequest(entry.getKey(), this.level));
                     result.put(entry.getValue(),l);
+                }
+            }
+        }
+    }
+    private void c4(Map<Integer,LinkedList<CacheOrderRequest>> result, DfsResultHomogenization dfsResult){
+        if(dfsResult!=null){
+            for(Map.Entry<String,LinkedList<Integer>> entry:dfsResult.ret.entrySet()){
+                for(int i:entry.getValue()) {
+                    if (result.containsKey(i)) {
+                        result.get(i).add(new CacheOrderRequest(entry.getKey(), this.level));
+                    } else {
+                        LinkedList<CacheOrderRequest> l = new LinkedList<>();
+                        l.add(new CacheOrderRequest(entry.getKey(), this.level));
+                        result.put(i, l);
+                    }
                 }
             }
         }
@@ -191,16 +206,18 @@ public class EdgeServer {
         /*-------------------------信息收集完毕-----------------------------------*/
 
         /**   第二步：计算最优解  **/
-        DfsResult resultHomogenization=null;
-        DfsResult resultHeterogenization=null;
+        DfsResultHomogenization resultHomogenization=null;
+        DfsResultHeterogenization resultHeterogenization=null;
         LinkedList<Integer> selectors=new LinkedList<>(this.children);
         selectors.add(this.seq);
-        dfs_Homogenization(resultHomogenization,records_from_count,needDistributeHomogenization,0,new HashMap<>(),selectors,router);
-        dfs_Heterogenization(resultHeterogenization,records_from_count,needDistributeHeterogenization,0,new HashMap<>(),selectors,router,new HashSet<>());
+        LinkedList<LinkedList<Integer>> selectors4Homogenization=new LinkedList<>();
+        dfs_fullArray(selectors4Homogenization,selectors,new LinkedList<>(),new HashSet<>());
+        dfs_Homogenization(resultHomogenization,records_from_count,needDistributeHomogenization,0,new HashMap<>(),selectors4Homogenization,router);
+        dfs_Heterogenization(resultHeterogenization,records_from_count,needDistributeHeterogenization,0,new HashMap<>(),selectors,router);
 
         /** 第三步：向下分发最优解（依据最优解，调用子域节点的receiveCacheRequest方法）  **/
         Map<Integer,LinkedList<CacheOrderRequest>> result=new HashMap<>();
-        c3(result,resultHomogenization);
+        c4(result,resultHomogenization);
         c3(result,resultHeterogenization);
         for(Map.Entry<Integer,LinkedList<CacheOrderRequest>> entry:result.entrySet()){
             EdgeServer edgeServer=router.getEdgeServer(entry.getKey());
@@ -208,16 +225,16 @@ public class EdgeServer {
         }
     }
 
-    private boolean d1(HashMap<String,Integer> path,String[] needDistribute,Router router
-            ,DfsResult result,HashMap<String,HashMap<Integer,Integer>> records_from_count){
+    private boolean d1(HashMap<String,Integer> path, String[] needDistribute, Router router
+            , DfsResultHeterogenization result, HashMap<String,HashMap<Integer,Integer>> records_from_count){
         if(path.size()== needDistribute.length){
             //说明遍历到子节点了
             if(result==null){
-                result=new DfsResult();
+                result=new DfsResultHeterogenization();
                 result.ret=new HashMap<>(path);
-                result.current=this.computeSolution(records_from_count,path,router);
+                result.current=this.computeHeterogenization(records_from_count,path,router);
             }else{
-                long al=this.computeSolution(records_from_count,path,router);
+                long al=this.computeHeterogenization(records_from_count,path,router);
                 if(result.current>al){
                     //当前才是最优解
                     result.current=al;
@@ -230,50 +247,137 @@ public class EdgeServer {
     }
     /**
      * 回溯算法，返回的最终结果是，内容分配到
-     * @param needDistributeHomogenization 待分配的同质化缓存
+     * @param needDistributeHeterogenization 待分配的同质化缓存
      * @param index 当前迭代过程的内容索引（needDistributeHomogenization下）
      * @param path 当前回溯路径
      * @param result 当前最优解
      * @param selector 候选节点
      * @param router 路由信息
+     * @param records_from_count 内容来源统计
      */
-    private void dfs_Homogenization(DfsResult result,HashMap<String,HashMap<Integer,Integer>> records_from_count
-            ,String[] needDistributeHomogenization,int index,HashMap<String,Integer> path,LinkedList<Integer> selector,Router router){
-        if(d1(path,needDistributeHomogenization,router,result,records_from_count)){
-            return;
-        }
-        for(int select:selector){
-            path.put(needDistributeHomogenization[index],select);
-            dfs_Homogenization(result,records_from_count,needDistributeHomogenization,index+1,path,selector,router);
-            path.remove(needDistributeHomogenization[index]);
-        }
-    }
-
-    private void dfs_Heterogenization(DfsResult result,HashMap<String,HashMap<Integer,Integer>> records_from_count
-            ,String[] needDistributeHeterogenization,int index,HashMap<String,Integer> path
-            ,LinkedList<Integer> selector,Router router,HashSet<Integer> alreadyUse){
+    private void dfs_Heterogenization(DfsResultHeterogenization result, HashMap<String,HashMap<Integer,Integer>> records_from_count
+            , String[] needDistributeHeterogenization, int index, HashMap<String,Integer> path,
+                                      LinkedList<Integer> selector, Router router){
         if(d1(path,needDistributeHeterogenization,router,result,records_from_count)){
             return;
         }
         for(int select:selector){
-            if(!alreadyUse.contains(select)) {
-                path.put(needDistributeHeterogenization[index], select);
-                alreadyUse.add(select);
-                dfs_Heterogenization(result, records_from_count, needDistributeHeterogenization, index + 1, path, selector, router,alreadyUse);
-                path.remove(needDistributeHeterogenization[index]);
-                alreadyUse.remove(select);
+            path.put(needDistributeHeterogenization[index],select);
+            dfs_Heterogenization(result,records_from_count,needDistributeHeterogenization,index+1,path,selector,router);
+            path.remove(needDistributeHeterogenization[index]);
+        }
+    }
+    /**
+     * 回溯计算同质化缓存最优解决方案
+     * @param result 返回的结果
+     * @param needDistributeHomogenization 待分配的同质化缓存
+     * @param index 当前迭代过程的内容索引（needDistributeHomogenization）（即需要为当内容指定缓存方案）
+     * @param path 当前回溯路径
+     * @param result 当前最优解
+     * @param selector 候选节点
+     * @param router 路由信息
+     * @param records_from_count 内容来源统计
+     */
+    private void dfs_Homogenization(DfsResultHomogenization result,HashMap<String,HashMap<Integer,Integer>> records_from_count
+            ,String[] needDistributeHomogenization, int index
+            , HashMap<String,LinkedList<Integer>> path, LinkedList<LinkedList<Integer>> selector, Router router){
+        if(path.size()== needDistributeHomogenization.length){
+            if(result==null){
+                result=new DfsResultHomogenization();
+                result.ret=path;
+                result.current=this.computeHomogenization(records_from_count,path,router);
+            }else{
+                long t=this.computeHomogenization(records_from_count,path,router);
+                if(result.current==t){
+                    //选择占用空间小的
+                    int currentOccupy=0;
+                    for(Map.Entry<String,LinkedList<Integer>> entry:path.entrySet()){
+                        currentOccupy+=entry.getValue().size();
+                    }
+                    int lastOccupy=0;
+                    for(Map.Entry<String,LinkedList<Integer>> entry:result.ret.entrySet()){
+                        lastOccupy+=entry.getValue().size();
+                    }
+                    if(currentOccupy<lastOccupy){
+                        result.ret=path;
+                    }
+                }else if(result.current>t){
+                    result.ret=path;
+                    result.current=t;
+                }
+                //相等了就遍历到末尾了，return
+            }
+            return;
+        }
+        for(LinkedList<Integer> selected:selector){
+            path.put(needDistributeHomogenization[index],selected);
+            dfs_Homogenization(result,records_from_count,needDistributeHomogenization,index+1,path,selector,router);
+            path.remove(needDistributeHomogenization[index]);
+        }
+    }
+    /**
+     * 计算全排列，同质化缓存中，每个缓存内容可以缓存的全部位置方案
+     * @param ret 结果
+     * @param selector 候选缓存节点
+     * @param path 当前选择的缓存节点
+     * @param alreadyUse 已经使用的缓存节点（防止同节点重复缓存）
+     */
+    private void dfs_fullArray(LinkedList<LinkedList<Integer>> ret,LinkedList<Integer> selector,LinkedList<Integer> path,HashSet<Integer> alreadyUse){
+        ret.add(path);
+        for(int selected:selector){
+            if(!alreadyUse.contains(selected)){
+                path.add(selected);
+                alreadyUse.add(selected);
+                dfs_fullArray(ret,selector,path,alreadyUse);
+                path.removeLast();
+                alreadyUse.remove(selected);
             }
         }
     }
 
+
     /**
-     * 计算当前解决方案的总访问跳数
+     * 计算同质化当前解决方案的总访问跳数，从每个用户源出发找到所有缓存内容的最短路径（每个内容缓存位置实际上是一个集合）
      * @param records_from_count 记录来源统计
      * @param path 解决方案
      * @param router 全局路由
      * @return 总跳数
      */
-    private long computeSolution(HashMap<String,HashMap<Integer,Integer>> records_from_count
+    private long computeHomogenization(HashMap<String,HashMap<Integer,Integer>> records_from_count
+            ,HashMap<String,LinkedList<Integer>> path,Router router){
+        long ret=0;
+        for(Map.Entry<String,LinkedList<Integer>> entry1:path.entrySet()){
+            String v=entry1.getKey();
+            LinkedList<Integer> list=entry1.getValue();
+            //int seq=entry1.getValue();
+            //m1表示内容v来源统计
+            HashMap<Integer,Integer> m1=records_from_count.get(v);
+            for(Map.Entry<Integer,Integer> entry2:m1.entrySet()){
+                int from=entry2.getKey();
+                long count=entry2.getValue();
+                //找到最短路径
+                int distance=999;
+                int path_length_from_core=router.getPathLength(from,router.core.seq,router.plNoPeer);
+                for(int seq:list){
+                    //找到所有缓存位置中的最短路径
+                    distance=Math.min(distance,router.getPathLength(seq,from, router.plNoPeer));
+                }
+                //需要与核心服务器的距离比较，取较小值
+                distance=Math.min(distance,path_length_from_core);
+                ret+=count*distance;
+            }
+        }
+        return ret;
+    }
+
+    /**
+     * 计算异质化解决方案的总访问跳数
+     * @param records_from_count 记录来源统计
+     * @param path 解决方案
+     * @param router 全局路由
+     * @return 总跳数
+     */
+    private long computeHeterogenization(HashMap<String,HashMap<Integer,Integer>> records_from_count
             ,HashMap<String,Integer> path,Router router){
         long ret=0;
         for(Map.Entry<String,Integer> entry1:path.entrySet()){
@@ -283,8 +387,8 @@ public class EdgeServer {
             HashMap<Integer,Integer> m1=records_from_count.get(v);
             for(Map.Entry<Integer,Integer> entry2:m1.entrySet()){
                 int from=entry2.getKey();
-                int count=entry2.getValue();
-                int distance=router.getPathLength(seq,from, router.plNoPeer);
+                long count=entry2.getValue();
+                int distance=Math.min(router.getPathLength(from,router.core.seq,router.plNoPeer),router.getPathLength(seq,from, router.plNoPeer));
                 ret+=count*distance;
             }
         }
