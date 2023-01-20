@@ -19,7 +19,7 @@ public class EdgeServer {
     public final long interval=5*60*1000;
 
     /**
-     * 更新访问记录，清除历史访问记录，保留统计区间内容的访问记录。（加入随机冷冻算法）(可用线程处理)
+     * 更新访问记录，清除历史访问记录，保留统计区间内容的访问记录。（加入随机冷冻算法）(可用线程处理) TODO
      */
     public void updateRecords(){
         Random r=new Random();
@@ -104,7 +104,7 @@ public class EdgeServer {
         }
     }
 
-
+    //统计访问记录
     private HashMap<String,Integer> countRecord(){
         HashMap<String,Integer> records_count=new HashMap<>();
         for(Record record:this.records){
@@ -162,7 +162,7 @@ public class EdgeServer {
         }
     }
     /**
-     * 缓存决策算法，局部全信息透明最优决策
+     * 缓存决策算法，局部全信息透明最优决策  定期执行 TODO
      * router是全局路由信息
      */
     public void solution(Router router){
@@ -225,26 +225,7 @@ public class EdgeServer {
         }
     }
 
-    private boolean d1(HashMap<String,Integer> path, String[] needDistribute, Router router
-            , DfsResultHeterogenization result, HashMap<String,HashMap<Integer,Integer>> records_from_count){
-        if(path.size()== needDistribute.length){
-            //说明遍历到子节点了
-            if(result==null){
-                result=new DfsResultHeterogenization();
-                result.ret=new HashMap<>(path);
-                result.current=this.computeHeterogenization(records_from_count,path,router);
-            }else{
-                long al=this.computeHeterogenization(records_from_count,path,router);
-                if(result.current>al){
-                    //当前才是最优解
-                    result.current=al;
-                    result.ret=new HashMap<>(path);
-                }
-            }
-            return true;
-        }
-        return false;
-    }
+
     /**
      * 回溯算法，返回的最终结果是，内容分配到
      * @param needDistributeHeterogenization 待分配的同质化缓存
@@ -258,7 +239,20 @@ public class EdgeServer {
     private void dfs_Heterogenization(DfsResultHeterogenization result, HashMap<String,HashMap<Integer,Integer>> records_from_count
             , String[] needDistributeHeterogenization, int index, HashMap<String,Integer> path,
                                       LinkedList<Integer> selector, Router router){
-        if(d1(path,needDistributeHeterogenization,router,result,records_from_count)){
+        if(path.size()== needDistributeHeterogenization.length){
+            //说明遍历到子节点了
+            if(result==null){
+                result=new DfsResultHeterogenization();
+                result.ret=new HashMap<>(path);
+                result.current=this.computeHeterogenization(records_from_count,path,router);
+            }else{
+                long al=this.computeHeterogenization(records_from_count,path,router);
+                if(result.current>al){
+                    //当前才是最优解
+                    result.current=al;
+                    result.ret=new HashMap<>(path);
+                }
+            }
             return;
         }
         for(int select:selector){
@@ -480,7 +474,6 @@ public class EdgeServer {
      */
     public Response receiveRequest(Request request, Router router){
         lastTimeTable.put(request.value,System.currentTimeMillis());
-        int lastServer=request.arrivalNewEdgeServer(this.seq);
         //记录下来每一次内容请求到达本节点的路由长度
         this.updateRecords(request.value,request.path.getFirst());
         if(request.isFromUser(router)) {
