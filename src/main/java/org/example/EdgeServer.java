@@ -7,7 +7,7 @@ public class EdgeServer {
     /**
      * 缓存容量
      */
-    public int caption = 100;
+    public int caption = 2;
 
     /**
      * 涉及到迭代器，且线程不安全时，不能锁，统一采用
